@@ -107,7 +107,12 @@ const MIDITape: React.FC = () => {
 
       // 1. Professional Neural AI Pattern Generation
       store.addLog(`AI: Beginning Deep Learning Inference for ${store.totalRecordingBeats} beats...`, "info");
-      const tracks = await StyleGenerator.generateStyleAI(store.events, store.bpm, store.totalRecordingBeats);
+      
+      const variation = store.activeSegmentId?.includes('var_') 
+          ? store.activeSegmentId.split('_')[1].toUpperCase() as 'A' | 'B' | 'C' | 'D'
+          : 'B';
+          
+      const tracks = await StyleGenerator.generateStyleAI(store.events, store.bpm, store.totalRecordingBeats, variation);
       
       store.addLog(`AI: Neural generation complete. Mapping ${tracks.length} tracks...`, "info");
       

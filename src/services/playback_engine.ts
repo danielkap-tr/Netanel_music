@@ -83,6 +83,13 @@ class PlaybackEngine {
         }).connect(this.masterReverb);
         this.synths['BRASS'].volume.value = -16;
 
+        // 5.5. Accordion (New - For Freilach)
+        this.synths['ACCORDION'] = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "square" },
+            envelope: { attack: 0.15, decay: 0.1, sustain: 0.8, release: 0.3 }
+        }).connect(this.masterChorus);
+        this.synths['ACCORDION'].volume.value = -14;
+
         // 6. User (Standard Solo Piano)
         this.synths['USER'] = new Tone.PolySynth(Tone.Synth, {
             oscillator: { type: "triangle" },

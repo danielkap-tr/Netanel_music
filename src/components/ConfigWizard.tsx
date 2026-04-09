@@ -11,6 +11,9 @@ const MODELS = [
 
 const STYLES = [
   { id: 'mizrachi', name: 'מזרחי (Mizrachi)', desc: 'מקצבי חפלה, דאנס ובלדות' },
+  { id: 'freilach', name: 'פריילאך (Freilach)', desc: 'מקצב חתונה יהודי אנרגטי (KORG Style)' },
+  { id: 'hora', name: 'הורה (Hora)', desc: 'מקצב הורה איטי ומרקיד (Jewish Soul)' },
+  { id: 'jewish-ballad', name: 'בלדה יהודית (Ballad)', desc: 'מרגש, שקט ורוחני' },
   { id: 'afrobeats', name: 'אפרוביט (Afrobeats)', desc: 'גרוב אפריקאי מודרני (Cymatics Inspired)' },
   { id: 'trap', name: 'טראפ (Trap)', desc: 'היי-האטים מהירים ובס עוצמתי (Cymatics Inspired)' },
   { id: 'pop-dance', name: 'פופ ודאנס (Pop)', desc: 'מקצבים מודרניים לרחבה' },
@@ -55,7 +58,15 @@ const ConfigWizard: React.FC = () => {
             <h2 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '0.5rem' }}>בחר את האורגן שלך</h2>
             <p style={{ color: 'var(--text-dim)', marginBottom: '2rem' }}>התאמת המבנה הפנימי של המקצב למפרט היצרן.</p>
             
-            <div style={{ display: 'grid', gap: '1rem' }}>
+            <div style={{ 
+              display: 'grid', 
+              gap: '1rem', 
+              maxHeight: '400px', 
+              overflowY: 'auto', 
+              paddingRight: '10px',
+              msOverflowStyle: 'none',
+              scrollbarWidth: 'thin'
+            }}>
               {MODELS.map(m => (
                 <div key={m.id} 
                      onClick={() => setKeyboardModel(m.id)}
@@ -75,7 +86,15 @@ const ConfigWizard: React.FC = () => {
             <h2 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '0.5rem' }}>בחירת סגנון מוזיקלי</h2>
             <p style={{ color: 'var(--text-dim)', marginBottom: '2rem' }}>הסגנון משפיע על ניתוח ההרמוניה ותבניות הליווי האוטומטיות.</p>
             
-            <div style={{ display: 'grid', gap: '1rem' }}>
+            <div style={{ 
+              display: 'grid', 
+              gap: '1rem', 
+              maxHeight: '400px', 
+              overflowY: 'auto', 
+              paddingRight: '10px',
+              msOverflowStyle: 'none',
+              scrollbarWidth: 'thin'
+            }}>
               {STYLES.map(s => (
                 <div key={s.id} 
                      onClick={() => setMusicalStyle(s.id)}
