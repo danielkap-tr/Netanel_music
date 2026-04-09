@@ -16,7 +16,7 @@ export class StyleGenerator {
         log("StyleGenerator: Initializing AI Engine...", "info");
         
         try {
-            const aiEvents = await MagentaService.generateAccompaniment(sourceEvents, bpm);
+            const aiEvents = await MagentaService.generateAccompaniment(sourceEvents, bpm, durationBeats);
             
             // Map the flat events back into GeneratedTrack structure
             const tracks: GeneratedTrack[] = [
@@ -79,14 +79,40 @@ export class StyleGenerator {
     private static generateDrums(style: string, bpm: number, durationBeats: number): MIDIEvent[] {
         const events: MIDIEvent[] = [];
         const bars = Math.ceil(durationBeats / 4);
+        
         for (let bar = 0; bar < bars; bar++) {
             const offset = bar * 4;
-            for (let b = 0; b < 4; b++) {
-                if (offset + b >= durationBeats) break;
-                const time = (offset + b) * (60000 / bpm);
-                if (b === 0 || b === 2) events.push(this.createDrumEvent(36, 110, time, offset + b)); // Kick
-                if (b === 1 || b === 3) events.push(this.createDrumEvent(38, 105, time, offset + b)); // Snare
-                events.push(this.createDrumEvent(42, 85, time, offset + b)); // Hihat
+            
+            if (style === 'afrobeats') {
+                // Typical Afrobeats "3-3-2" or syncopated feel
+                const kicks = [0, 0.75, 1.5, 2.25, 3];
+                kicks.forEach(k => {
+                    if (offset + k < durationBeats) events.push(this.createDrumEvent(36, 110, (offset + k) * (60000/bpm), offset + k));
+                });
+                [1, 3].forEach(s => {
+                    if (offset + s < durationBeats) events.push(this.createDrumEvent(38, 100, (offset + s) * (60000/bpm), offset + s));
+                });
+            } else if (style === 'trap') {
+                // Trap: Snare on 3, fast hats
+                if (offset + 2 < durationBeats) events.push(this.createDrumEvent(38, 110, (offset + 2) * (60000/bpm), offset + 2)); // Snare on 3
+                const kicks = [0, 0.5, 1.25, 2.75];
+                kicks.forEach(k => {
+                    if (offset + k < durationBeats) events.push(this.createDrumEvent(36, 120, (offset + k) * (60000/bpm), offset + k));
+                });
+                // Fast hats (16ths)
+                for (let h = 0; h < 16; h++) {
+                    const step = h * 0.25;
+                    if (offset + step < durationBeats) events.push(this.createDrumEvent(42, 70 + Math.random() * 30, (offset + step) * (60000/bpm), offset + step));
+                }
+            } else {
+                // Classic Pop/Rock
+                for (let b = 0; b < 4; b++) {
+                    if (offset + b >= durationBeats) break;
+                    const time = (offset + b) * (60000 / bpm);
+                    if (b === 0 || b === 2) events.push(this.createDrumEvent(36, 110, time, offset + b)); // Kick
+                    if (b === 1 || b === 3) events.push(this.createDrumEvent(38, 105, time, offset + b)); // Snare
+                    events.push(this.createDrumEvent(42, 85, time, offset + b)); // Hihat
+                }
             }
         }
         return events;
@@ -94,10 +120,24 @@ export class StyleGenerator {
 
     private static generatePercussion(style: string, bpm: number, durationBeats: number): MIDIEvent[] {
         const events: MIDIEvent[] = [];
-        const resolution = 0.5; // 8th notes
-        for (let b = 0; b < durationBeats / resolution; b++) {
-            const time = (b * resolution) * (60000 / bpm);
-            events.push(this.createDrumEvent(44, 60 + Math.random() * 20, time, b * resolution)); // Shaker/Conga
+        
+        if (style === 'afrobeats') {
+            // Complex percussion for Afrobeats
+            const resolution = 0.25; // 16th notes
+            for (let b = 0; b < durationBeats / resolution; b++) {
+                const step = b * resolution;
+                const time = step * (60000 / bpm);
+                if (Math.random() > 0.6) {
+                    const instrument = [44, 45, 46][Math.floor(Math.random() * 3)]; // Different perc sounds
+                    events.push(this.createDrumEvent(instrument, 70 + Math.random() * 30, time, step));
+                }
+            }
+        } else {
+            const resolution = 0.5; // 8th notes
+            for (let b = 0; b < durationBeats / resolution; b++) {
+                const time = (b * resolution) * (60000 / bpm);
+                events.push(this.createDrumEvent(44, 60 + Math.random() * 20, time, b * resolution)); // Shaker/Conga
+            }
         }
         return events;
     }

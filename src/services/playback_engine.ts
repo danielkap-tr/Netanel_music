@@ -6,48 +6,89 @@ class PlaybackEngine {
     private synths: Record<string, any> = {};
     private currentPart: Tone.Part | null = null;
     private isInitialized = false;
+    private masterReverb: Tone.Reverb | null = null;
+    private masterLimiter: Tone.Limiter | null = null;
+    private masterChorus: Tone.Chorus | null = null;
 
-    private initSynths() {
+    private async initSynths() {
         if (this.isInitialized) return;
 
-        // 1. Drums (Simplified GM-like)
+        // Master FX Chain
+        this.masterReverb = new Tone.Reverb({ decay: 2.5, wet: 0.3 }).toDestination();
+        this.masterLimiter = new Tone.Limiter(-1).toDestination();
+        this.masterChorus = new Tone.Chorus(4, 2.5, 0.5).connect(this.masterReverb);
+        
+        await this.masterReverb.generate();
+
+        // 1. Drums (808 Samples with slight room)
         this.synths['DRUMS'] = new Tone.Sampler({
             urls: { 
                 C1: "https://tonejs.github.io/audio/drum-samples/808/kick.mp3",
                 D1: "https://tonejs.github.io/audio/drum-samples/808/snare.mp3",
                 "F#1": "https://tonejs.github.io/audio/drum-samples/808/hihat.mp3"
             }
-        }).toDestination();
-        this.synths['DRUMS'].volume.value = -6;
+        }).connect(this.masterLimiter);
+        this.synths['DRUMS'].volume.value = -4;
 
-        // 2. Bass (Deep)
-        this.synths['BASS'] = new Tone.MonoSynth({
-            oscillator: { type: "sawtooth" },
-            envelope: { attack: 0.1, release: 0.5 }
-        }).toDestination();
-        this.synths['BASS'].volume.value = -15;
+        // 1.5. Professional Percussion (Cymatics Local Samples)
+        this.synths['PERC'] = new Tone.Sampler({
+            urls: {
+                C2: "/samples/perc/bongo.wav",
+                D2: "/samples/perc/shaker.wav",
+                E2: "/samples/perc/tamb.wav",
+                F2: "/samples/perc/cowbell.wav"
+            }
+        }).connect(this.masterReverb);
+        this.synths['PERC'].volume.value = -8;
 
-        // 3. Piano / Accomp
-        this.synths['PIANO'] = new Tone.PolySynth(Tone.Synth).toDestination();
-        this.synths['PIANO'].volume.value = -18;
+        // 2. Bass (Deep, Warm DuoSynth)
+        this.synths['BASS'] = new Tone.DuoSynth({
+            vibratoAmount: 0.1,
+            vibratoRate: 5,
+            harmonicity: 1.5,
+            voice0: {
+                oscillator: { type: "triangle" },
+                envelope: { attack: 0.05, release: 0.5 },
+                filterEnvelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0.5, baseFrequency: 200, octaves: 2.5 }
+            },
+            voice1: {
+                oscillator: { type: "sine" },
+                envelope: { attack: 0.1, release: 0.5 }
+            }
+        }).connect(this.masterLimiter);
+        this.synths['BASS'].volume.value = -12;
 
-        // 4. Strings / Pad
+        // 3. Piano / Accomp (Rich FM)
+        this.synths['PIANO'] = new Tone.PolySynth(Tone.FMSynth, {
+            harmonicity: 1,
+            modulationIndex: 3.5,
+            oscillator: { type: "triangle" },
+            envelope: { attack: 0.01, decay: 0.5, sustain: 0.4, release: 1 },
+            modulation: { type: "square" },
+            modulationEnvelope: { attack: 0.1, decay: 0.2, sustain: 0.3, release: 1 }
+        }).connect(this.masterReverb);
+        this.synths['PIANO'].volume.value = -16;
+
+        // 4. Strings / Pad (Dreamy & Wide)
         this.synths['STRINGS'] = new Tone.PolySynth(Tone.Synth, {
             oscillator: { type: "sine" },
-            envelope: { attack: 1.5, release: 1.5 }
-        }).toDestination();
-        this.synths['STRINGS'].volume.value = -22;
+            envelope: { attack: 1.2, decay: 2, sustain: 0.8, release: 2.5 }
+        }).connect(this.masterChorus);
+        this.synths['STRINGS'].volume.value = -20;
 
-        // 5. Brass
+        // 5. Brass (Bright & Dynamic)
         this.synths['BRASS'] = new Tone.PolySynth(Tone.Synth, {
             oscillator: { type: "sawtooth" },
-            envelope: { attack: 0.05, decay: 0.2, sustain: 1, release: 0.1 }
-        }).toDestination();
-        this.synths['BRASS'].volume.value = -18;
+            envelope: { attack: 0.08, decay: 0.3, sustain: 0.6, release: 0.2 }
+        }).connect(this.masterReverb);
+        this.synths['BRASS'].volume.value = -16;
 
-        // 6. User (Default)
-        this.synths['USER'] = new Tone.PolySynth(Tone.Synth).toDestination();
-        this.synths['USER'].volume.value = -12;
+        // 6. User (Standard Solo Piano)
+        this.synths['USER'] = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "triangle" },
+            envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 1 }
+        }).connect(this.masterReverb);
+        this.synths['USER'].volume.value = -10;
 
         this.isInitialized = true;
     }
@@ -75,14 +116,18 @@ class PlaybackEngine {
         this.currentPart = new Tone.Part((time, value) => {
             const synth = this.synths[value.track] || this.synths['USER'];
             
-            if (value.track === 'DRUMS' || value.track === 'PERC') {
-                // Map MIDI drum notes to sampler keys
+            if (value.track === 'DRUMS') {
                 let drumKey = 'C1';
                 if (value.note.startsWith('D')) drumKey = 'D1';
                 if (value.note.startsWith('F#') || value.note.startsWith('G')) drumKey = 'F#1';
-                (synth as any).triggerAttackRelease(drumKey, value.duration, time, value.velocity);
+                (synth as any).triggerAttackRelease(drumKey, value.duration, time, value.velocity || 0.8);
+            } else if (value.track === 'PERC') {
+                // Round-robin or mapping-based PERC
+                const percKeys = ['C2', 'D2', 'E2', 'F2'];
+                const key = percKeys[Math.floor(Math.random() * percKeys.length)];
+                (synth as any).triggerAttackRelease(key, value.duration, time, value.velocity || 0.6);
             } else {
-                (synth as any).triggerAttackRelease(value.note, value.duration, time, value.velocity);
+                (synth as any).triggerAttackRelease(value.note, value.duration, time, value.velocity || 0.7);
             }
         }, toneEvents);
 

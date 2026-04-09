@@ -11,6 +11,8 @@ const MODELS = [
 
 const STYLES = [
   { id: 'mizrachi', name: 'מזרחי (Mizrachi)', desc: 'מקצבי חפלה, דאנס ובלדות' },
+  { id: 'afrobeats', name: 'אפרוביט (Afrobeats)', desc: 'גרוב אפריקאי מודרני (Cymatics Inspired)' },
+  { id: 'trap', name: 'טראפ (Trap)', desc: 'היי-האטים מהירים ובס עוצמתי (Cymatics Inspired)' },
   { id: 'pop-dance', name: 'פופ ודאנס (Pop)', desc: 'מקצבים מודרניים לרחבה' },
   { id: 'funk-soul', name: 'פאנק וסול (Funk)', desc: 'גרוב חי ועשיר' },
   { id: 'rock-ballad', name: 'רוק ובלדות (Rock)', desc: 'תופים עוצמתיים וגיטרות' }
