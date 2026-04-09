@@ -55,7 +55,7 @@ interface ArrangementState {
   setKeyboardModel: (model: string) => void;
   setMusicalStyle: (style: string) => void;
   setIsAnalyzing: (isAnalyzing: boolean) => void;
-  loadEvents: (events: any[], merge?: boolean) => void;
+  loadEvents: (events: any[], merge?: boolean, duration?: number) => void;
   addEvent: (event: MIDIEvent) => void;
   clearRecording: () => void;
   
@@ -142,8 +142,9 @@ export const useStore = create<ArrangementState>((set, get) => ({
   setKeyboardModel: (model) => set({ keyboardModel: model }),
   setMusicalStyle: (style) => set({ musicalStyle: style }),
   setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
-  loadEvents: (newEvents, merge) => set((state) => ({ 
-    events: merge ? [...state.events, ...newEvents] : newEvents 
+  loadEvents: (newEvents, merge, duration) => set((state) => ({ 
+    events: merge ? [...state.events, ...newEvents] : newEvents,
+    totalRecordingBeats: duration !== undefined ? duration : (merge ? state.totalRecordingBeats : 4)
   })),
   
   setRecordingState: (state) => {
@@ -174,7 +175,9 @@ export const useStore = create<ArrangementState>((set, get) => ({
       const bpm = get().bpm;
       const now = performance.now();
       const relativeTime = now - (recordingStartTime || 0);
-      const currentBeat = (relativeTime / 1000) * (bpm / 60);
+      const calculatedDuration = (relativeTime / 1000) * (bpm / 60);
+      
+      const finalBeats = Math.max(get().totalRecordingBeats, Math.ceil(calculatedDuration));
 
       const activeSegmentId = get().activeSegmentId;
       const pendingNotes = get().pendingNotes;
@@ -187,7 +190,7 @@ export const useStore = create<ArrangementState>((set, get) => ({
         Object.entries(pendingNotes).forEach(([key, start]) => {
           if (!start) return;
           const durationMs = relativeTime - start.startTime;
-          const durationBeat = currentBeat - start.startBeat;
+          const durationBeat = calculatedDuration - start.startBeat;
           
           newEvents.push({
             status: 0x80 | start.channel, // Fake Note Off
@@ -217,10 +220,10 @@ export const useStore = create<ArrangementState>((set, get) => ({
         });
         
         return { 
-          segmentStats: newStats, 
-          events: newEvents, 
-          pendingNotes: {},
-          totalRecordingBeats: Math.ceil(currentBeat) // Round up to nearest beat for music production safety
+            segmentStats: newStats, 
+            events: newEvents, 
+            pendingNotes: {},
+            totalRecordingBeats: finalBeats
         };
       });
     }
@@ -283,7 +286,8 @@ export const useStore = create<ArrangementState>((set, get) => ({
                         events: [...state.events, noteEvent],
                         segmentStats: newStats,
                         lastNote: { note, velocity: start.velocity },
-                        pendingNotes: { ...state.pendingNotes, [noteKey]: undefined as any }
+                        pendingNotes: { ...state.pendingNotes, [noteKey]: undefined as any },
+                        totalRecordingBeats: Math.max(state.totalRecordingBeats, Math.ceil(currentBeat))
                     };
                 });
             }
@@ -292,7 +296,10 @@ export const useStore = create<ArrangementState>((set, get) => ({
  else {
         // Other events (clock etc)
         const taggedEvent = { ...event, time: relativeTime, beat: currentBeat, segment: activeSegmentId };
-        set((state) => ({ events: [...state.events, taggedEvent] }));
+        set((state) => ({ 
+            events: [...state.events, taggedEvent],
+            totalRecordingBeats: Math.max(state.totalRecordingBeats, Math.ceil(currentBeat))
+        }));
     }
   },
 

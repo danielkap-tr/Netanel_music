@@ -28,6 +28,27 @@ export class MagentaService {
     }
 
     /**
+     * Parses a MIDI file Blob into an array of MIDIEvents
+     */
+    static async blobToEvents(blob: Blob, bpm: number): Promise<{ events: MIDIEvent[], durationBeats: number }> {
+        const log = useStore.getState().addLog;
+        log(`AI: Parsing MIDI file (${(blob.size / 1024).toFixed(1)} KB)...`, "info");
+        
+        try {
+            const seq = await mm.blobToNoteSequence(blob);
+            const events = this.noteSequenceToEvents(seq, bpm, 'USER');
+            
+            const durationBeats = seq.totalTime ? (seq.totalTime * (bpm / 60)) : 0;
+            log(`AI: Parsed ${events.length} events over ${durationBeats.toFixed(1)} beats.`, "info");
+            
+            return { events, durationBeats };
+        } catch (error: any) {
+            log(`AI Error: Failed to parse MIDI file: ${error.message}`, "error");
+            throw error;
+        }
+    }
+
+    /**
      * Generates a complete 10-track style accompaniment based on source events
      */
     static async generateAccompaniment(sourceEvents: MIDIEvent[], bpm: number, durationBeats: number): Promise<MIDIEvent[]> {
@@ -35,7 +56,11 @@ export class MagentaService {
         const log = useStore.getState().addLog;
         
         log("AI: Transforming MIDI to NoteSequence...", "info");
-        const inputSeq = this.midiToNoteSequence(sourceEvents, bpm);
+        let inputSeq = this.midiToNoteSequence(sourceEvents, bpm);
+        
+        // IMPORTANT: RNN models require a quantized sequence
+        log("AI: Quantizing sequence (4 steps per quarter)...", "info");
+        inputSeq = mm.sequences.quantizeNoteSequence(inputSeq, 4);
         
         // 1. Generate Drums (AI Pattern) - Generate a 2-bar loop and then repeat it
         log("AI: Generating rhythmic patterns (DrumsRNN)...", "info");

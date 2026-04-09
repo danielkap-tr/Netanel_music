@@ -248,7 +248,7 @@ const MIDITape: React.FC = () => {
                                     style={{ background: store.recordingState === 'RECORDING' ? 'var(--accent-red)' : '' }}>
                                 {store.recordingState === 'RECORDING' ? <><Square size={18}/> עצור</> : <><Activity size={18}/> הקלט</>}
                             </button>
-                            <button onClick={handleGenerate} disabled={isGenerating} className="premium-button" style={{ opacity: isGenerating ? 0.5 : 1 }}>
+                            <button onClick={handleGenerate} disabled={isGenerating || store.recordingState === 'RECORDING'} className="premium-button" style={{ opacity: (isGenerating || store.recordingState === 'RECORDING') ? 0.5 : 1 }}>
                                 <Sparkles size={18}/> צור מקצב
                             </button>
                             <button onClick={() => store.playbackState === 'PLAYING' ? playbackEngine.stop() : playbackEngine.playArrangement()} 

@@ -13,9 +13,9 @@ class PlaybackEngine {
         // 1. Drums (Simplified GM-like)
         this.synths['DRUMS'] = new Tone.Sampler({
             urls: { 
-                C1: "https://tonejs.github.io/audio/drum-samples/CR8000/kick.mp3",
-                D1: "https://tonejs.github.io/audio/drum-samples/CR8000/snare.mp3",
-                "F#1": "https://tonejs.github.io/audio/drum-samples/CR8000/hihat.mp3"
+                C1: "https://tonejs.github.io/audio/drum-samples/808/kick.mp3",
+                D1: "https://tonejs.github.io/audio/drum-samples/808/snare.mp3",
+                "F#1": "https://tonejs.github.io/audio/drum-samples/808/hihat.mp3"
             }
         }).toDestination();
         this.synths['DRUMS'].volume.value = -6;

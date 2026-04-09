@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { Sparkles, Settings, Mic, Upload, Music, ArrowLeft, ArrowRight } from 'lucide-react';
+import { MagentaService } from '../services/magenta_service';
 
 const WelcomeScreen: React.FC = () => {
   const { setAppMode, setView, setInputSource, setIsAnalyzing, loadEvents } = useStore();
@@ -27,20 +28,20 @@ const WelcomeScreen: React.FC = () => {
     // Transition to Wizard (Setting style/keyboard first)
     setView('WIZARD');
 
-    // Simulate Background Analysis
-    setIsAnalyzing(true);
-    
-    // For the demo/WOW factor: We load some "example" events after a delay
-    setTimeout(() => {
-        const mockEvents = [
-            { status: 0x90, data1: 60, data2: 100, channel: 0, time: 0, beat: 0, durationBeat: 0.5, type: 'note', segment: 'var_a', source: 'midi' },
-            { status: 0x90, data1: 64, data2: 100, channel: 0, time: 500, beat: 1, durationBeat: 0.5, type: 'note', segment: 'var_a', source: 'midi' },
-            { status: 0x90, data1: 67, data2: 100, channel: 0, time: 1000, beat: 2, durationBeat: 0.5, type: 'note', segment: 'var_a', source: 'midi' },
-            { status: 0x90, data1: 72, data2: 100, channel: 0, time: 1500, beat: 3, durationBeat: 0.5, type: 'note', segment: 'var_a', source: 'midi' }
-        ];
-        loadEvents(mockEvents);
+    // Process the file
+    try {
+        if (type === 'MIDI') {
+            const { events, durationBeats } = await MagentaService.blobToEvents(file, 120); // Default 120 bpm for initial parse
+            loadEvents(events, false, durationBeats);
+        } else {
+            // Audio transcription placeholder
+            alert("המרת אודיו ל-MIDI היא תכונה מתקדמת שבקרוב תהיה זמינה. כרגע תומכים בקבצי MIDI בלבד.");
+        }
+    } catch (err) {
+        console.error("File processing error:", err);
+    } finally {
         setIsAnalyzing(false);
-    }, 2500);
+    }
   };
 
   return (
