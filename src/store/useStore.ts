@@ -21,7 +21,12 @@ interface ArrangementState {
   isDebugMode: boolean;
   recordingState: 'IDLE' | 'RECORDING' | 'STOPPED';
   playbackState: 'IDLE' | 'PLAYING';
-  appMode: 'RECORDING' | 'PLAYBACK';
+  appMode: 'BEGINNER' | 'ADVANCED';
+  view: 'WELCOME' | 'WIZARD' | 'WORKBENCH';
+  inputSource: 'RECORD' | 'UPLOAD' | 'AUDIO' | null;
+  keyboardModel: string | null;
+  musicalStyle: string | null;
+  isAnalyzing: boolean;
   events: (MIDIEvent & { beat?: number; durationBeat?: number; durationMs?: number; opacity?: number })[];
   segmentStats: Record<string, RecordingSegment>;
   activeSegmentId: string | null;
@@ -41,6 +46,12 @@ interface ArrangementState {
   setIsDebugMode: (isDebug: boolean) => void;
   setRecordingState: (state: ArrangementState['recordingState']) => void;
   setAppMode: (mode: ArrangementState['appMode']) => void;
+  setView: (view: ArrangementState['view']) => void;
+  setInputSource: (source: ArrangementState['inputSource']) => void;
+  setKeyboardModel: (model: string) => void;
+  setMusicalStyle: (style: string) => void;
+  setIsAnalyzing: (isAnalyzing: boolean) => void;
+  loadEvents: (events: any[], merge?: boolean) => void;
   addEvent: (event: MIDIEvent) => void;
   clearRecording: () => void;
   
@@ -56,7 +67,12 @@ export const useStore = create<ArrangementState>((set, get) => ({
   isDebugMode: true,
   recordingState: 'IDLE',
   playbackState: 'IDLE',
-  appMode: 'RECORDING',
+  appMode: 'BEGINNER',
+  view: 'WELCOME',
+  inputSource: null,
+  keyboardModel: null,
+  musicalStyle: null,
+  isAnalyzing: false,
   events: [],
   segmentStats: {
     'intro_1': { type: 'intro', status: 'EMPTY', eventCount: 0, loop: false },
@@ -90,6 +106,14 @@ export const useStore = create<ArrangementState>((set, get) => ({
 
   setIsDebugMode: (isDebug) => set({ isDebugMode: isDebug }),
   setAppMode: (mode) => set({ appMode: mode }),
+  setView: (view) => set({ view }),
+  setInputSource: (source) => set({ inputSource: source }),
+  setKeyboardModel: (model) => set({ keyboardModel: model }),
+  setMusicalStyle: (style) => set({ musicalStyle: style }),
+  setIsAnalyzing: (isAnalyzing) => set({ isAnalyzing }),
+  loadEvents: (newEvents, merge) => set((state) => ({ 
+    events: merge ? [...state.events, ...newEvents] : newEvents 
+  })),
   
   setRecordingState: (state) => {
     if (state === 'RECORDING') {

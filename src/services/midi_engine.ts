@@ -8,10 +8,14 @@ export interface MIDIEvent {
   isDrum?: boolean;
   isTrigger?: boolean;
   bar?: number;
-  track?: 'DRUMS' | 'BASS' | 'MELODY' | 'CHORDS';
+  track?: 'DRUMS' | 'BASS' | 'MELODY' | 'CHORDS' | 'PIANO' | 'GUITAR' | 'STRINGS' | 'BRASS' | 'PERC' | 'USER';
   segment?: string;
   chord?: string;
   source: 'midi' | 'keyboard';
+  beat?: number;
+  durationBeat?: number;
+  durationMs?: number;
+  opacity?: number;
 }
 
 export class MIDIEngine {
