@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { RotateCcw, Activity, Music, Keyboard, Play, Square, Settings, Sparkles, Download, ArrowRight, Save, Check } from 'lucide-react';
+import { RotateCcw, Activity, Music, Keyboard, Play, Square, Settings, Sparkles, Download, ArrowRight, Save, Check, CheckCircle } from 'lucide-react';
 import { midiEngine } from '../services/midi_engine';
 import { useStore } from '../store/useStore';
 import { midiNoteToName } from '../utils/midi_utils';
@@ -140,18 +140,19 @@ const MIDITape: React.FC = () => {
       {store.appMode === 'BEGINNER' && store.recordingState !== 'RECORDING' && store.events.length > 0 ? (
           <div className="flex-center animate-fade-in" dir="rtl" style={{ height: '100vh', padding: '2rem' }}>
               <div className="glass-card" style={{ maxWidth: '600px', width: '100%', padding: '3rem', textAlign: 'center' }}>
-                  <div style={{ color: 'var(--accent-green)', marginBottom: '1.5rem' }}><CheckIcon size={64}/></div>
+                  <div style={{ color: 'var(--accent-green)', marginBottom: '1.5rem' }}><CheckCircle size={64}/></div>
                   <h2 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '1rem' }}>ההקלטה הושלמה!</h2>
                   <p style={{ color: 'var(--text-dim)', marginBottom: '2.5rem' }}>
                       קלטנו {store.events.length} תווים. המערכת מוכנה לייצר את המקצב המלא עבור ה-{store.keyboardModel}.
                   </p>
                     <div style={{ display: 'flex', gap: '12px' }}>
-                        <button onClick={handleGenerate} className="premium-button" style={{ flex: 1, justifyContent: 'center', padding: '1.5rem' }}>
+                        <button onClick={handleGenerate} disabled={isGenerating} className="premium-button" style={{ flex: 1, justifyContent: 'center', padding: '1.5rem', opacity: isGenerating ? 0.5 : 1 }}>
                             {isGenerating ? 'מעבד נתונים...' : <><Sparkles size={20}/> צור מקצב עכשיו</>}
                         </button>
                         <button onClick={() => store.playbackState === 'PLAYING' ? playbackEngine.stop() : playbackEngine.playArrangement()} 
+                                disabled={isGenerating}
                                 className={`premium-button ${store.playbackState === 'PLAYING' ? 'active' : ''}`} style={{ flex: 1, justifyContent: 'center' }}>
-                            {store.playbackState === 'PLAYING' ? <><Square size={20}/> עצור האזנה</> : <><Play size={20}/> האזן לתוצאה</>}
+                            {store.playbackState === 'PLAYING' ? <><Square size={20}/> עצור</> : <><Play size={20}/> האזן</>}
                         </button>
                     </div>
                     <button onClick={() => store.clearRecording()} className="premium-button secondary" style={{ justifyContent: 'center' }}>
@@ -233,7 +234,7 @@ const MIDITape: React.FC = () => {
                             </p>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
-                            <button onClick={handleGenerate} className="premium-button">
+                            <button onClick={handleGenerate} disabled={isGenerating} className="premium-button" style={{ opacity: isGenerating ? 0.5 : 1 }}>
                                 <Sparkles size={18}/> צור מקצב
                             </button>
                             <button onClick={() => store.playbackState === 'PLAYING' ? playbackEngine.stop() : playbackEngine.playArrangement()} 
@@ -259,9 +260,16 @@ const MIDITape: React.FC = () => {
         </div>
       )}
 
-      {(isAnalyzing || isGenerating) && (
-          <div className="flex-center" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(15px)', zIndex: 9999 }}>
-              <div style={{ textAlign: 'center', maxWidth: '500px', width: '90%' }}>
+       {/* ANALYSIS / GENERATION OVERLAY */}
+       {(isAnalyzing || isGenerating) && (
+           <div className="flex-center" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(15px)', zIndex: 9999 }}>
+               {/* Emergency Close Button */}
+               <button onClick={() => { setIsGenerating(false); store.setIsAnalyzing(false); }} 
+                       style={{ position: 'absolute', top: '30px', right: '30px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                   <RotateCcw size={24} /> <span style={{ fontSize: '0.8rem' }}>ביטול מאולץ</span>
+               </button>
+
+               <div style={{ textAlign: 'center', maxWidth: '500px', width: '90%' }}>
                   <div className="analysis-spinner"></div>
                   <h2 style={{ fontSize: '2.2rem', fontWeight: 900, marginTop: '2.5rem' }} className="text-gradient">
                     {isGenerating ? 'עיבוד AI מתקדם...' : 'מנתח קלט מוזיקלי...'}
@@ -348,7 +356,7 @@ const MatrixSection = ({ label, items, icons }: any) => {
 
 const CheckIcon = ({ size }: { size: number }) => (
     <div style={{ width: size, height: size, borderRadius: '50%', background: 'rgba(34, 197, 94, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--accent-green)' }}>
-        <Check size={size/2} />
+        <CheckCircle size={size/2} />
     </div>
 );
 

@@ -6,9 +6,14 @@ export class ExportService {
      * Exports the style in two formats: Standard MIDI and Keyboard-Specific Style.
      */
     static async exportMultiFormat(events: MIDIEvent[], styleName: string, bpm: number, keyboardModel: string | null) {
+        // 1. Export Standard MIDI
         this.exportMidi(events, styleName, bpm);
+
+        // 2. Export Keyboard-Specific Format with a small delay to avoid browser blocking
         const extension = this.getExtensionForModel(keyboardModel);
-        this.exportKeyboardStyle(events, styleName, bpm, extension);
+        setTimeout(() => {
+            this.exportKeyboardStyle(events, styleName, bpm, extension);
+        }, 800);
     }
 
     private static exportMidi(events: MIDIEvent[], styleName: string, bpm: number) {
