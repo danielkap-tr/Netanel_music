@@ -112,18 +112,27 @@ const MIDITape: React.FC = () => {
           ? store.activeSegmentId.split('_')[1].toUpperCase() as 'A' | 'B' | 'C' | 'D'
           : 'B';
           
-      const tracks = await StyleGenerator.generateStyleAI(store.events, store.bpm, store.totalRecordingBeats, variation);
+      // CLEAN SLATE: Purge all previous AI artifacts (including legacy residuals) to ensure zero stacking
+      const originalEvents = store.events.filter(e => 
+        e.source !== 'ai' && 
+        (!e.track || e.track === 'USER') && 
+        e.source !== 'glitter'
+      );
+      
+      const tracks = await StyleGenerator.generateStyleAI(originalEvents, store.bpm, store.totalRecordingBeats, variation);
       
       store.addLog(`AI: Neural generation complete. Mapping ${tracks.length} tracks...`, "info");
       
       const generatedEvents = tracks.flatMap(t => t.events);
-      store.loadEvents(generatedEvents, true);
-      store.addLog(`AI: Dynamic arrangement complete (${generatedEvents.length} neural events).`, "info");
+      
+      // Update store: replace old AI events with new ones, keep keyboard recording
+      store.loadEvents([...originalEvents, ...generatedEvents], false, store.totalRecordingBeats);
+      store.addLog(`AI: Professional arrangement complete (${generatedEvents.length} events).`, "info");
 
       // 2. Multi-Format Professional Export
       store.addLog(`Export: Generating formats for ${store.totalRecordingBeats} beats...`, "info");
       ExportService.exportMultiFormat(
-          [...store.events, ...generatedEvents], 
+          [...originalEvents, ...generatedEvents], 
           store.musicalStyle || 'AI_V1', 
           store.bpm, 
           store.keyboardModel,

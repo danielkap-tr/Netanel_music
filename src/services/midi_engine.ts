@@ -10,10 +10,10 @@ export interface MIDIEvent {
   isDrum?: boolean;
   isTrigger?: boolean;
   bar?: number;
-  track?: 'DRUMS' | 'BASS' | 'MELODY' | 'CHORDS' | 'PIANO' | 'GUITAR' | 'STRINGS' | 'BRASS' | 'PERC' | 'USER';
+  track?: 'DRUMS' | 'BASS' | 'MELODY' | 'CHORDS' | 'PIANO' | 'GUITAR' | 'STRINGS' | 'BRASS' | 'PERC' | 'USER' | 'ORGAN' | 'ACCORDION';
   segment?: string;
   chord?: string;
-  source: 'midi' | 'keyboard';
+  source: 'midi' | 'keyboard' | 'ai' | 'glitter';
   beat?: number;
   durationBeat?: number;
   durationMs?: number;
@@ -123,7 +123,7 @@ export class MIDIEngine {
     this.onStatusChange?.(status);
   }
 
-  private handleMessage(msg: any, source: 'midi' | 'keyboard' = 'midi') {
+  private handleMessage(msg: any, source: 'midi' | 'keyboard' | 'ai' | 'glitter' = 'midi') {
     const [status] = msg.data;
     const now = performance.now();
     

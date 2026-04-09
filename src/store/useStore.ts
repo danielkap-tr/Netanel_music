@@ -95,7 +95,7 @@ export const useStore = create<ArrangementState>((set, get) => ({
     'ending_2': { type: 'ending', status: 'EMPTY', eventCount: 0, loop: false },
     'ending_3': { type: 'ending', status: 'EMPTY', eventCount: 0, loop: false },
   },
-  activeSegmentId: 'var_a',
+  activeSegmentId: 'var_b',
   recordingStartTime: null,
   currentSegmentStartTime: null,
   activeNotes: {},

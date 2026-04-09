@@ -52,67 +52,59 @@ export class ExportService {
 
     private static buildMidiWriter(events: MIDIEvent[], bpm: number, addMarkers = false, totalDurationBeats?: number) {
         const log = useStore.getState().addLog;
-        const tracks: Record<string, any> = {
-            'USER': new MidiWriter.Track(),
-            'DRUMS': new MidiWriter.Track(),
-            'PERC': new MidiWriter.Track(),
-            'BASS': new MidiWriter.Track(),
-            'PIANO': new MidiWriter.Track(),
-            'GUITAR': new MidiWriter.Track(),
-            'STRINGS': new MidiWriter.Track(),
-            'BRASS': new MidiWriter.Track()
+        
+        // Channel Map (Standard MIDI / Arranger Keyboard Logic)
+        const channelMap: Record<string, number> = {
+            'PIANO': 1,
+            'BASS': 2,
+            'GUITAR': 3,
+            'STRINGS': 4,
+            'BRASS': 5,
+            'USER': 6,
+            'ACCORDION': 7,
+            'ORGAN': 8,
+            'DRUMS': 10,  // Mandatory for standard MIDI kits (Ch 10 index is 9 or 10 depending on library)
+            'PERC': 11
         };
 
-        log(`Export: Initializing ${Object.keys(tracks).length} tracks`, "info");
-
-        // Initialize Tracks
-        Object.keys(tracks).forEach(key => {
-            const t = tracks[key];
-            t.addTrackName(key);
-            if (key === 'USER') t.setTempo(bpm);
+        const tracks: Record<string, any> = {};
+        Object.keys(channelMap).forEach(key => {
+            tracks[key] = new MidiWriter.Track();
+            tracks[key].addTrackName(key);
+            if (key === 'PIANO') tracks[key].setTempo(bpm);
             
-            if (key === 'PIANO') t.addEvent(new MidiWriter.ProgramChangeEvent({instrument: 1}));
-            if (key === 'GUITAR') t.addEvent(new MidiWriter.ProgramChangeEvent({instrument: 25}));
-            if (key === 'STRINGS') t.addEvent(new MidiWriter.ProgramChangeEvent({instrument: 49}));
-            if (key === 'BRASS') t.addEvent(new MidiWriter.ProgramChangeEvent({instrument: 57}));
-            if (key === 'BASS') t.addEvent(new MidiWriter.ProgramChangeEvent({instrument: 33}));
+            const channel = channelMap[key];
+            if (key === 'PIANO') tracks[key].addEvent(new MidiWriter.ProgramChangeEvent({instrument: 1, channel}));
+            if (key === 'GUITAR') tracks[key].addEvent(new MidiWriter.ProgramChangeEvent({instrument: 25, channel}));
+            if (key === 'STRINGS') tracks[key].addEvent(new MidiWriter.ProgramChangeEvent({instrument: 49, channel}));
+            if (key === 'BRASS') tracks[key].addEvent(new MidiWriter.ProgramChangeEvent({instrument: 57, channel}));
+            if (key === 'BASS') tracks[key].addEvent(new MidiWriter.ProgramChangeEvent({instrument: 33, channel}));
+            if (key === 'ORGAN') tracks[key].addEvent(new MidiWriter.ProgramChangeEvent({instrument: 17, channel}));
+            if (key === 'ACCORDION') tracks[key].addEvent(new MidiWriter.ProgramChangeEvent({instrument: 22, channel}));
         });
+
+        log(`Export: Initializing ${Object.keys(tracks).length} tracks and mapping channels`, "info");
 
         if (addMarkers && totalDurationBeats) {
             log("Export: Adding markers for keyboard style", "info");
             const ticksPerBar = 128 * 4;
-            tracks['USER'].addMarker('SInt 1', 0);
+            tracks['PIANO'].addMarker('SInt 1', 0);
             
-            // Partition the style into logical sections based on total length
-            // Example: Intro (1 bar), Var A (remainder/2), Var B (remainder/2), End (last bar)
             const lastTick = Math.floor(totalDurationBeats * 128);
-            
             if (totalDurationBeats >= 8) {
-                tracks['USER'].addMarker('SVar A', ticksPerBar);
-                tracks['USER'].addMarker('SVar B', Math.floor(totalDurationBeats * 64)); // halfway
-                tracks['USER'].addMarker('SEnd 1', lastTick - ticksPerBar);
+                tracks['PIANO'].addMarker('SVar A', ticksPerBar);
+                tracks['PIANO'].addMarker('SVar B', Math.floor(totalDurationBeats * 64)); 
+                tracks['PIANO'].addMarker('SEnd 1', lastTick - ticksPerBar);
             } else {
-                tracks['USER'].addMarker('SEnd 1', lastTick);
+                tracks['PIANO'].addMarker('SEnd 1', lastTick);
             }
         } else if (totalDurationBeats) {
-            // Force exact MIDI file length by adding a silent "End Of Song" note
             const finalTick = Math.floor(totalDurationBeats * 128);
-            tracks['USER'].addMarker('End', finalTick);
-            
-            // Adding a zero-velocity note at the end is a more robust way to force length in some DAWs
-            const silentEnd = new MidiWriter.NoteEvent({
-                pitch: ['C1'],
-                duration: 'T1',
-                velocity: 0,
-                startTick: finalTick - 1
-            });
-            tracks['USER'].addEvent(silentEnd);
+            tracks['PIANO'].addMarker('End', finalTick);
         }
 
-        log(`Export: Mapping ${events.length} events (Sanitizing Ticks)...`, "info");
+        log(`Export: Mapping ${events.length} events to multi-channel buffer...`, "info");
         let processedCount = 0;
-        
-        // Safety Limit: Max 1 hour of music (around 460800 ticks at 128 TPB)
         const MAX_TICKS = 1000000; 
 
         events.forEach(ev => {
@@ -123,19 +115,22 @@ export class ExportService {
             const velocity = Math.floor(ev.data2 || 80);
 
             if (isNaN(durationTicks) || isNaN(startTick) || isNaN(velocity) || startTick > MAX_TICKS || startTick < 0) {
-                return; // Skip invalid or extreme events
+                return;
             }
 
             try {
+                const targetTrack = ev.track || 'USER';
+                const channel = channelMap[targetTrack] || 1;
                 const pitchName = this.midiNoteToName(ev.data1);
+                
                 const noteEvent = new MidiWriter.NoteEvent({
                     pitch: [pitchName],
                     duration: `T${durationTicks}`,
                     velocity: Math.min(127, Math.max(0, velocity)),
-                    startTick: startTick
+                    startTick: startTick,
+                    channel: channel
                 });
 
-                const targetTrack = ev.track || 'USER';
                 if (tracks[targetTrack]) {
                     tracks[targetTrack].addEvent(noteEvent);
                 } else {
@@ -147,7 +142,7 @@ export class ExportService {
             }
         });
 
-        log(`Export: Mapped ${processedCount} events. Executing Writer...`, "info");
+        log(`Export: Mapped ${processedCount} events on ${Object.keys(tracks).length} channels.`, "info");
         return new MidiWriter.Writer(Object.values(tracks));
     }
 
