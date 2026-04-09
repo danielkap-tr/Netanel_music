@@ -1,32 +1,57 @@
 import MidiWriter from 'midi-writer-js';
 import { MIDIEvent } from './midi_engine';
+import { useStore } from '../store/useStore';
 
 export class ExportService {
     /**
      * Exports the style in two formats: Standard MIDI and Keyboard-Specific Style.
      */
-    static async exportMultiFormat(events: MIDIEvent[], styleName: string, bpm: number, keyboardModel: string | null) {
+    static async exportMultiFormat(events: MIDIEvent[], styleName: string, bpm: number, keyboardModel: string | null, totalDurationBeats?: number) {
+        const log = useStore.getState().addLog;
+        log(`Export: Starting multi-format export for ${events.length} events`, "info");
+        
+        // Use provided duration or fallback to events
+        const duration = totalDurationBeats || this.calculateTotalBeats(events);
+        
         // 1. Export Standard MIDI
-        this.exportMidi(events, styleName, bpm);
+        try {
+            log(`Export: Building Standard MIDI writer object (Duration: ${duration} beats)...`, "info");
+            const writer = this.buildMidiWriter(events, bpm, false, duration);
+            
+            log("Export: Building binary file buffer...", "info");
+            const buffer = writer.buildFile();
+            
+            log(`Export: Buffer built (${buffer.length} bytes). Creating download link...`, "info");
+            this.downloadBlob(buffer, `AI_Professional_Ensemble_${styleName}.mid`, 'audio/midi');
+            log("Export: Standard MIDI download triggered", "info");
+        } catch (e: any) {
+            log(`Export Error (Standard MIDI): ${e.message}`, "error");
+            console.error("Export Error (Standard MIDI):", e);
+        }
 
         // 2. Export Keyboard-Specific Format with a small delay to avoid browser blocking
         const extension = this.getExtensionForModel(keyboardModel);
+        log(`Export: Preparing ${extension} style file...`, "info");
         setTimeout(() => {
-            this.exportKeyboardStyle(events, styleName, bpm, extension);
+            try {
+                log(`Export: Building ${extension} writer object (Duration: ${duration} beats)...`, "info");
+                const writer = this.buildMidiWriter(events, bpm, true, duration);
+                
+                log(`Export: Building ${extension} binary buffer...`, "info");
+                const buffer = writer.buildFile();
+                
+                log(`Export: ${extension} Buffer built (${buffer.length} bytes). Triggering download...`, "info");
+                this.downloadBlob(buffer, `AI_Studio_Style_${styleName}${extension}`, 'audio/midi');
+                log(`Export: ${extension} style download triggered`, "info");
+            } catch (e: any) {
+                log(`Export Error (${extension}): ${e.message}`, "error");
+                console.error(`Export Error (${extension}):`, e);
+            }
         }, 800);
     }
 
-    private static exportMidi(events: MIDIEvent[], styleName: string, bpm: number) {
-        const writer = this.buildMidiWriter(events, bpm);
-        this.downloadFile(writer.dataUri(), `AI_Professional_Ensemble_${styleName}.mid`);
-    }
-
-    private static exportKeyboardStyle(events: MIDIEvent[], styleName: string, bpm: number, extension: string) {
-        const writer = this.buildMidiWriter(events, bpm, true);
-        this.downloadFile(writer.dataUri(), `AI_Studio_Style_${styleName}${extension}`);
-    }
-
-    private static buildMidiWriter(events: MIDIEvent[], bpm: number, addMarkers = false) {
+    private static buildMidiWriter(events: MIDIEvent[], bpm: number, addMarkers = false, totalDurationBeats?: number) {
+        const log = useStore.getState().addLog;
         const tracks: Record<string, any> = {
             'USER': new MidiWriter.Track(),
             'DRUMS': new MidiWriter.Track(),
@@ -38,13 +63,14 @@ export class ExportService {
             'BRASS': new MidiWriter.Track()
         };
 
-        // Initialize Tracks with Metadata and Program Changes
+        log(`Export: Initializing ${Object.keys(tracks).length} tracks`, "info");
+
+        // Initialize Tracks
         Object.keys(tracks).forEach(key => {
             const t = tracks[key];
             t.addTrackName(key);
             if (key === 'USER') t.setTempo(bpm);
             
-            // Standard General MIDI Program Changes
             if (key === 'PIANO') t.addEvent(new MidiWriter.ProgramChangeEvent({instrument: 1}));
             if (key === 'GUITAR') t.addEvent(new MidiWriter.ProgramChangeEvent({instrument: 25}));
             if (key === 'STRINGS') t.addEvent(new MidiWriter.ProgramChangeEvent({instrument: 49}));
@@ -52,31 +78,76 @@ export class ExportService {
             if (key === 'BASS') t.addEvent(new MidiWriter.ProgramChangeEvent({instrument: 33}));
         });
 
-        if (addMarkers) {
+        if (addMarkers && totalDurationBeats) {
+            log("Export: Adding markers for keyboard style", "info");
+            const ticksPerBar = 128 * 4;
             tracks['USER'].addMarker('SInt 1', 0);
-            tracks['USER'].addMarker('SVar A', 128 * 4);
-            tracks['USER'].addMarker('SVar B', 128 * 8);
-            tracks['USER'].addMarker('SEnd 1', 128 * 12);
+            
+            // Partition the style into logical sections based on total length
+            // Example: Intro (1 bar), Var A (remainder/2), Var B (remainder/2), End (last bar)
+            const lastTick = Math.floor(totalDurationBeats * 128);
+            
+            if (totalDurationBeats >= 8) {
+                tracks['USER'].addMarker('SVar A', ticksPerBar);
+                tracks['USER'].addMarker('SVar B', Math.floor(totalDurationBeats * 64)); // halfway
+                tracks['USER'].addMarker('SEnd 1', lastTick - ticksPerBar);
+            } else {
+                tracks['USER'].addMarker('SEnd 1', lastTick);
+            }
+        } else if (totalDurationBeats) {
+            // Force exact MIDI file length by adding a silent "End Of Song" note
+            const finalTick = Math.floor(totalDurationBeats * 128);
+            tracks['USER'].addMarker('End', finalTick);
+            
+            // Adding a zero-velocity note at the end is a more robust way to force length in some DAWs
+            const silentEnd = new MidiWriter.NoteEvent({
+                pitch: ['C1'],
+                duration: 'T1',
+                velocity: 0,
+                startTick: finalTick - 1
+            });
+            tracks['USER'].addEvent(silentEnd);
         }
+
+        log(`Export: Mapping ${events.length} events (Sanitizing Ticks)...`, "info");
+        let processedCount = 0;
+        
+        // Safety Limit: Max 1 hour of music (around 460800 ticks at 128 TPB)
+        const MAX_TICKS = 1000000; 
 
         events.forEach(ev => {
             if (ev.type !== 'note' || ev.beat === undefined) return;
             
-            const noteEvent = new MidiWriter.NoteEvent({
-                pitch: [this.midiNoteToName(ev.data1)],
-                duration: `T${Math.floor((ev.durationBeat || 0.5) * 128)}`,
-                velocity: Math.floor(ev.data2),
-                startTick: Math.floor(ev.beat * 128)
-            });
+            const durationTicks = Math.floor(Math.min(10000, (ev.durationBeat || 0.5) * 128));
+            const startTick = Math.floor(ev.beat * 128);
+            const velocity = Math.floor(ev.data2 || 80);
 
-            const targetTrack = ev.track || 'USER';
-            if (tracks[targetTrack]) {
-                tracks[targetTrack].addEvent(noteEvent);
-            } else {
-                tracks['USER'].addEvent(noteEvent);
+            if (isNaN(durationTicks) || isNaN(startTick) || isNaN(velocity) || startTick > MAX_TICKS || startTick < 0) {
+                return; // Skip invalid or extreme events
+            }
+
+            try {
+                const pitchName = this.midiNoteToName(ev.data1);
+                const noteEvent = new MidiWriter.NoteEvent({
+                    pitch: [pitchName],
+                    duration: `T${durationTicks}`,
+                    velocity: Math.min(127, Math.max(0, velocity)),
+                    startTick: startTick
+                });
+
+                const targetTrack = ev.track || 'USER';
+                if (tracks[targetTrack]) {
+                    tracks[targetTrack].addEvent(noteEvent);
+                } else {
+                    tracks['USER'].addEvent(noteEvent);
+                }
+                processedCount++;
+            } catch (err) {
+                // Ignore
             }
         });
 
+        log(`Export: Mapped ${processedCount} events. Executing Writer...`, "info");
         return new MidiWriter.Writer(Object.values(tracks));
     }
 
@@ -87,13 +158,23 @@ export class ExportService {
         return '.sty';
     }
 
-    private static downloadFile(uri: string, filename: string) {
+    private static calculateTotalBeats(events: MIDIEvent[]): number {
+        return events.reduce((max, ev) => {
+            const end = (ev.beat || 0) + (ev.durationBeat || 0.1);
+            return Math.max(max, end);
+        }, 4);
+    }
+
+    private static downloadBlob(content: Uint8Array | string, filename: string, mimeType: string) {
+        const blob = new Blob([content as any], { type: mimeType });
+        const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
-        link.href = uri;
+        link.href = url;
         link.download = filename;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     }
 
     private static midiNoteToName(midi: number): string {

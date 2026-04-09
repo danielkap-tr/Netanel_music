@@ -4,7 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Netanel MIDI Tape</title>
+    <script>
+      window.global = window;
+      window.process = { 
+        env: {},
+        hrtime: function(previousValue) {
+          var now = performance.now() * 1e-3;
+          var seconds = Math.floor(now);
+          var nanoseconds = Math.floor((now % 1) * 1e9);
+          if (previousValue) {
+            seconds = seconds - previousValue[0];
+            nanoseconds = nanoseconds - previousValue[1];
+            if (nanoseconds < 0) {
+              seconds--;
+              nanoseconds += 1e9;
+            }
+          }
+          return [seconds, nanoseconds];
+        },
+        nextTick: function(fn) {
+          Promise.resolve().then(fn);
+        }
+      };
+      var Buffer = { isBuffer: function() { return false; } };
+    </script>
   </head>
+
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

@@ -3,7 +3,6 @@ import WelcomeScreen from './components/WelcomeScreen';
 import ConfigWizard from './components/ConfigWizard';
 import MIDITape from './components/MIDITape';
 import { useStore } from './store/useStore';
-
 const App: React.FC = () => {
   const { view } = useStore();
 

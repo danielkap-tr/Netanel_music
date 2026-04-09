@@ -1,3 +1,5 @@
+import { useStore } from '../store/useStore';
+
 export interface MIDIEvent {
   status: number;
   data1: number;
@@ -117,6 +119,7 @@ export class MIDIEngine {
 
   private emitStatus(status: string) {
     console.log(`MIDI Status: ${status}`);
+    useStore.getState().addLog(`MIDI: ${status}`, status.includes('FAILED') || status.includes('NOT SUPPORTED') ? 'error' : 'info');
     this.onStatusChange?.(status);
   }
 

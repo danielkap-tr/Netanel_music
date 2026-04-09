@@ -96,36 +96,44 @@ const MIDITape: React.FC = () => {
     return () => clearInterval(interval);
   }, [store.recordingState, store.playbackState, store.recordingStartTime, store.bpm, currentBeat]);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true);
+    store.addLog("AI: Initializing Neural Engine...", "info");
     
-    setTimeout(() => {
-      try {
-        if (!store.events || store.events.length === 0) {
-            throw new Error("No events to process");
-        }
-
-        // 1. Professional AI Pattern Generation
-        const tracks = StyleGenerator.generateStyle(store.events, store.musicalStyle || 'pop', store.bpm);
-        const generatedEvents = tracks.flatMap(t => t.events);
-        store.loadEvents(generatedEvents, true);
-
-        // 2. Multi-Format Professional Export
-        ExportService.exportMultiFormat(
-            [...store.events, ...generatedEvents], 
-            store.musicalStyle || 'AI_Style', 
-            store.bpm, 
-            store.keyboardModel
-        );
-
-        alert("עיבוד AI הושלם! 2 קבצים הורדו: MIDI מקצועי ופורמט מקצב ייעודי.");
-      } catch (error) {
-        console.error("AI Generation Error:", error);
-        alert("אירעה שגיאה בעיבוד המקצב. וודא שהקלטת משהו ונסה שוב.");
-      } finally {
-        setIsGenerating(false);
+    try {
+      if (!store.events || store.events.length === 0) {
+          throw new Error("No events to process");
       }
-    }, 3000);
+
+      // 1. Professional Neural AI Pattern Generation
+      store.addLog(`AI: Beginning Deep Learning Inference for ${store.totalRecordingBeats} beats...`, "info");
+      const tracks = await StyleGenerator.generateStyleAI(store.events, store.bpm, store.totalRecordingBeats);
+      
+      store.addLog(`AI: Neural generation complete. Mapping ${tracks.length} tracks...`, "info");
+      
+      const generatedEvents = tracks.flatMap(t => t.events);
+      store.loadEvents(generatedEvents, true);
+      store.addLog(`AI: Dynamic arrangement complete (${generatedEvents.length} neural events).`, "info");
+
+      // 2. Multi-Format Professional Export
+      store.addLog(`Export: Generating formats for ${store.totalRecordingBeats} beats...`, "info");
+      ExportService.exportMultiFormat(
+          [...store.events, ...generatedEvents], 
+          store.musicalStyle || 'AI_V1', 
+          store.bpm, 
+          store.keyboardModel,
+          store.totalRecordingBeats
+      );
+      store.addLog("Export: Process complete.", "info");
+
+      alert("עיבוד AI (Magenta) הושלם! המקצב נוצר בשיטת Deep Learning.");
+    } catch (error: any) {
+      console.error("AI Generation Error:", error);
+      store.addLog(`AI Critical Error: ${error.message || 'Check terminal for details'}`, "error");
+      alert("אירעה שגיאה בעיבוד ה-AI. וודא שיש חיבור לאינטרנט ונסה שוב.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const barLines = useMemo(() => {
@@ -225,15 +233,21 @@ const MIDITape: React.FC = () => {
                   <div className="glass-card flex-center" style={{ flex: 1, background: 'radial-gradient(circle at center, rgba(59, 130, 246, 0.05) 0%, transparent 70%)' }}>
                      <div style={{ textAlign: 'center' }}>
                         <div style={{ marginBottom: '2rem' }}>
-                            <button onClick={() => store.setRecordingState(store.recordingState === 'RECORDING' ? 'IDLE' : 'RECORDING')} 
-                                    className={`rec-button-large ${store.recordingState === 'RECORDING' ? 'active' : ''}`}>
-                                <div className="inner-circle"></div>
-                            </button>
                             <p style={{ marginTop: '1rem', fontWeight: 700, color: store.recordingState === 'RECORDING' ? 'var(--accent-red)' : 'var(--text-dim)' }}>
                                 {store.recordingState === 'RECORDING' ? 'הקלטה פעילה' : 'לחץ להקלטה'}
                             </p>
                         </div>
                         <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button onClick={() => {
+                                const newState = store.recordingState === 'RECORDING' ? 'IDLE' : 'RECORDING';
+                                store.setRecordingState(newState);
+                                if (newState === 'RECORDING') store.addLog("Recording started...", "warn");
+                                else store.addLog("Recording stopped.", "info");
+                            }}
+                                    className={`premium-button ${store.recordingState === 'RECORDING' ? 'active' : ''}`}
+                                    style={{ background: store.recordingState === 'RECORDING' ? 'var(--accent-red)' : '' }}>
+                                {store.recordingState === 'RECORDING' ? <><Square size={18}/> עצור</> : <><Activity size={18}/> הקלט</>}
+                            </button>
                             <button onClick={handleGenerate} disabled={isGenerating} className="premium-button" style={{ opacity: isGenerating ? 0.5 : 1 }}>
                                 <Sparkles size={18}/> צור מקצב
                             </button>

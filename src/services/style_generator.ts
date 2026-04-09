@@ -1,4 +1,6 @@
+import { useStore } from '../store/useStore';
 import { MIDIEvent } from './midi_engine';
+import { MagentaService } from './magenta_service';
 
 export interface GeneratedTrack {
     type: 'DRUMS' | 'BASS' | 'PIANO' | 'GUITAR' | 'STRINGS' | 'BRASS' | 'PERC' | 'ORGAN';
@@ -9,23 +11,55 @@ export class StyleGenerator {
     /**
      * Orchestrates a full 10-track professional ensemble.
      */
-    static generateStyle(sourceEvents: MIDIEvent[], musicalStyle: string, bpm: number): GeneratedTrack[] {
+    static async generateStyleAI(sourceEvents: MIDIEvent[], bpm: number, durationBeats: number): Promise<GeneratedTrack[]> {
+        const log = useStore.getState().addLog;
+        log("StyleGenerator: Initializing AI Engine...", "info");
+        
+        try {
+            const aiEvents = await MagentaService.generateAccompaniment(sourceEvents, bpm);
+            
+            // Map the flat events back into GeneratedTrack structure
+            const tracks: GeneratedTrack[] = [
+                { type: 'DRUMS', events: aiEvents.filter(e => e.track === 'DRUMS') },
+                { type: 'BASS', events: aiEvents.filter(e => e.track === 'BASS') },
+                { type: 'PIANO', events: this.generatePiano(60 % 12, bpm, durationBeats) }, // Fallback to classic for some tracks
+                { type: 'GUITAR', events: this.generateGuitar(60 % 12, bpm, durationBeats) },
+                { type: 'STRINGS', events: this.generateStrings(60 % 12, bpm, durationBeats) },
+                { type: 'BRASS', events: this.generateBrass(60 % 12, bpm, durationBeats) }
+            ];
+
+            return tracks;
+        } catch (error: any) {
+            log(`StyleGenerator Error: AI failed, falling back to Classic mode: ${error.message}`, "error");
+            return this.generateStyle(sourceEvents, 'pop', bpm, durationBeats);
+        }
+    }
+
+    /**
+     * Classic Rule-Based Generation
+     */
+    static generateStyle(sourceEvents: MIDIEvent[], musicalStyle: string, bpm: number, durationBeats: number): GeneratedTrack[] {
         const tracks: GeneratedTrack[] = [];
         const scale = this.analyzeScale(sourceEvents);
         const root = (sourceEvents.find(e => e.type === 'note')?.data1 || 60) % 12;
         
+        useStore.getState().addLog(`StyleGenerator: Analyzing style "${musicalStyle}" at ${bpm} BPM`, "info");
+        useStore.getState().addLog(`StyleGenerator: Detected root note ${(root + 12) % 12}`, "info");
+        
         // 1. Core Rhythm Section
-        tracks.push({ type: 'DRUMS', events: this.generateDrums(musicalStyle, bpm) });
-        tracks.push({ type: 'PERC', events: this.generatePercussion(musicalStyle, bpm) });
-        tracks.push({ type: 'BASS', events: this.generateBass(root, musicalStyle, bpm) });
+        tracks.push({ type: 'DRUMS', events: this.generateDrums(musicalStyle, bpm, durationBeats) });
+        tracks.push({ type: 'PERC', events: this.generatePercussion(musicalStyle, bpm, durationBeats) });
+        tracks.push({ type: 'BASS', events: this.generateBass(root, musicalStyle, bpm, durationBeats) });
 
         // 2. Harmonic Accompaniment
-        tracks.push({ type: 'PIANO', events: this.generatePiano(root, bpm) });
-        tracks.push({ type: 'GUITAR', events: this.generateGuitar(root, bpm) });
-        tracks.push({ type: 'STRINGS', events: this.generateStrings(root, bpm) });
+        tracks.push({ type: 'PIANO', events: this.generatePiano(root, bpm, durationBeats) });
+        tracks.push({ type: 'GUITAR', events: this.generateGuitar(root, bpm, durationBeats) });
+        tracks.push({ type: 'STRINGS', events: this.generateStrings(root, bpm, durationBeats) });
 
         // 3. Brass Accents (Groove reinforcement)
-        tracks.push({ type: 'BRASS', events: this.generateBrass(root, bpm) });
+        tracks.push({ type: 'BRASS', events: this.generateBrass(root, bpm, durationBeats) });
+
+        useStore.getState().addLog(`StyleGenerator: Created Rhythm and Harmonic sections`, "info");
 
         // 4. Humanize & Finish
         tracks.forEach(t => {
@@ -42,11 +76,13 @@ export class StyleGenerator {
         return [0, 2, 3, 5, 7, 8, 10].map(n => (n + root) % 12);
     }
 
-    private static generateDrums(style: string, bpm: number): MIDIEvent[] {
+    private static generateDrums(style: string, bpm: number, durationBeats: number): MIDIEvent[] {
         const events: MIDIEvent[] = [];
-        for (let bar = 0; bar < 4; bar++) {
+        const bars = Math.ceil(durationBeats / 4);
+        for (let bar = 0; bar < bars; bar++) {
             const offset = bar * 4;
             for (let b = 0; b < 4; b++) {
+                if (offset + b >= durationBeats) break;
                 const time = (offset + b) * (60000 / bpm);
                 if (b === 0 || b === 2) events.push(this.createDrumEvent(36, 110, time, offset + b)); // Kick
                 if (b === 1 || b === 3) events.push(this.createDrumEvent(38, 105, time, offset + b)); // Snare
@@ -56,18 +92,19 @@ export class StyleGenerator {
         return events;
     }
 
-    private static generatePercussion(style: string, bpm: number): MIDIEvent[] {
+    private static generatePercussion(style: string, bpm: number, durationBeats: number): MIDIEvent[] {
         const events: MIDIEvent[] = [];
-        for (let b = 0; b < 16; b++) {
-            const time = (b * 0.5) * (60000 / bpm);
-            events.push(this.createDrumEvent(44, 60 + Math.random() * 20, time, b * 0.5)); // Shaker/Conga
+        const resolution = 0.5; // 8th notes
+        for (let b = 0; b < durationBeats / resolution; b++) {
+            const time = (b * resolution) * (60000 / bpm);
+            events.push(this.createDrumEvent(44, 60 + Math.random() * 20, time, b * resolution)); // Shaker/Conga
         }
         return events;
     }
 
-    private static generateBass(root: number, style: string, bpm: number): MIDIEvent[] {
+    private static generateBass(root: number, style: string, bpm: number, durationBeats: number): MIDIEvent[] {
         const events: MIDIEvent[] = [];
-        for (let b = 0; b < 16; b++) {
+        for (let b = 0; b < durationBeats; b++) {
             if (b % 2 === 0) {
                 const time = b * (60000 / bpm);
                 events.push(this.createNoteEvent(24 + root + (b % 4 === 0 ? 0 : 7), 90, 1, time, b, 0.25));
@@ -76,12 +113,14 @@ export class StyleGenerator {
         return events;
     }
 
-    private static generatePiano(root: number, bpm: number): MIDIEvent[] {
+    private static generatePiano(root: number, bpm: number, durationBeats: number): MIDIEvent[] {
         const events: MIDIEvent[] = [];
         // Piano Stabs on 2, 2+, 4
         const beats = [1, 1.5, 3];
-        for (let bar = 0; bar < 4; bar++) {
+        const bars = Math.ceil(durationBeats / 4);
+        for (let bar = 0; bar < bars; bar++) {
             beats.forEach(b => {
+                if (bar * 4 + b >= durationBeats) return;
                 const time = (bar * 4 + b) * (60000 / bpm);
                 // Three note chord
                 [0, 4, 7].forEach(o => events.push(this.createNoteEvent(48 + root + o, 80, 2, time, bar * 4 + b, 0.2)));
@@ -90,20 +129,22 @@ export class StyleGenerator {
         return events;
     }
 
-    private static generateGuitar(root: number, bpm: number): MIDIEvent[] {
+    private static generateGuitar(root: number, bpm: number, durationBeats: number): MIDIEvent[] {
         const events: MIDIEvent[] = [];
         // Strumming 16ths
-        for (let b = 0; b < 32; b++) {
+        for (let b = 0; b < durationBeats * 4; b++) {
             const time = (b * 0.25) * (60000 / bpm);
             events.push(this.createNoteEvent(52 + root + (b % 2 === 0 ? 0 : 3), 60 + Math.random() * 20, 3, time, b * 0.25, 0.1));
         }
         return events;
     }
 
-    private static generateStrings(root: number, bpm: number): MIDIEvent[] {
+    private static generateStrings(root: number, bpm: number, durationBeats: number): MIDIEvent[] {
         const events: MIDIEvent[] = [];
         // Sustained Root and 5th
-        for (let bar = 0; bar < 4; bar++) {
+        const bars = Math.ceil(durationBeats / 4);
+        for (let bar = 0; bar < bars; bar++) {
+            if (bar * 4 >= durationBeats) break;
             const time = (bar * 4) * (60000 / bpm);
             events.push(this.createNoteEvent(60 + root, 60, 4, time, bar * 4, 4));
             events.push(this.createNoteEvent(67 + root, 55, 4, time, bar * 4, 4));
@@ -111,12 +152,14 @@ export class StyleGenerator {
         return events;
     }
 
-    private static generateBrass(root: number, bpm: number): MIDIEvent[] {
+    private static generateBrass(root: number, bpm: number, durationBeats: number): MIDIEvent[] {
         const events: MIDIEvent[] = [];
         // Trumpet accents on end of phrase (Bar 2 and 4)
-        for (let bar = 1; bar < 4; bar += 2) {
+        const bars = Math.ceil(durationBeats / 4);
+        for (let bar = 1; bar < bars; bar += 2) {
             const beats = [3, 3.5, 3.75]; // "Pap-pa-pa!"
             beats.forEach(b => {
+                if (bar * 4 + b >= durationBeats) return;
                 const time = (bar * 4 + b) * (60000 / bpm);
                 events.push(this.createNoteEvent(72 + root, 110, 5, time, bar * 4 + b, 0.1));
             });

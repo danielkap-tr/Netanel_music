@@ -40,9 +40,13 @@ interface ArrangementState {
   playNextSegment: { group: string, index: number } | null;
 
   bpm: number;
+  totalRecordingBeats: number;
   currentChord: { root: string; type: string } | null;
+  logs: { id: string; message: string; type: 'info' | 'error' | 'warn'; timestamp: number }[];
   
   // Actions
+  addLog: (message: string, type?: 'info' | 'error' | 'warn') => void;
+  clearLogs: () => void;
   setIsDebugMode: (isDebug: boolean) => void;
   setRecordingState: (state: ArrangementState['recordingState']) => void;
   setAppMode: (mode: ArrangementState['appMode']) => void;
@@ -102,7 +106,34 @@ export const useStore = create<ArrangementState>((set, get) => ({
   playNextSegment: null,
 
   bpm: 120,
+  totalRecordingBeats: 4, // Default safety
   currentChord: null,
+  logs: [],
+
+  addLog: (message, type = 'info') => {
+    const timestamp = Date.now();
+    
+    // UI Update
+    set((state) => ({
+      logs: [
+        { id: Math.random().toString(36).substr(2, 9), message, type, timestamp },
+        ...state.logs.slice(0, 49)
+      ]
+    }));
+
+    // Mirror to Terminal Server (with a small throttle/check)
+    if (get().isDebugMode) {
+      fetch('http://localhost:3001/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, type, timestamp })
+      }).catch(() => {
+        // Silent fail: server likely not running
+      });
+    }
+  },
+
+  clearLogs: () => set({ logs: [] }),
 
   setIsDebugMode: (isDebug) => set({ isDebugMode: isDebug }),
   setAppMode: (mode) => set({ appMode: mode }),
@@ -139,10 +170,14 @@ export const useStore = create<ArrangementState>((set, get) => ({
       });
     } else if (state === 'IDLE' && get().recordingState === 'RECORDING') {
       // FINAL SWEEP ON STOP
-      const { pendingNotes, recordingStartTime, bpm, activeSegmentId } = get();
+      const recordingStartTime = get().recordingStartTime;
+      const bpm = get().bpm;
       const now = performance.now();
       const relativeTime = now - (recordingStartTime || 0);
       const currentBeat = (relativeTime / 1000) * (bpm / 60);
+
+      const activeSegmentId = get().activeSegmentId;
+      const pendingNotes = get().pendingNotes;
 
       set((state) => {
         const newStats = { ...state.segmentStats };
@@ -181,7 +216,12 @@ export const useStore = create<ArrangementState>((set, get) => ({
           }
         });
         
-        return { segmentStats: newStats, events: newEvents, pendingNotes: {} };
+        return { 
+          segmentStats: newStats, 
+          events: newEvents, 
+          pendingNotes: {},
+          totalRecordingBeats: Math.ceil(currentBeat) // Round up to nearest beat for music production safety
+        };
       });
     }
     set({ recordingState: state });
